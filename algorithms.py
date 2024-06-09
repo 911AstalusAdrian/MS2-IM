@@ -31,12 +31,15 @@ class CNNClassifier(nn.Module):
         x = self.conv1(x)
         x = F.relu(x)
 
+        # Add pooling
+
         x = self.conv2(x)
         x = F.relu(x)
 
         x = x.max(dim=2)[0]  # Max pooling over time steps
         x = self.dropout(x)  # Add dropout for regularization
         x = self.fc1(x)
+        x = F.softmax(x)
         return x
 
     def fit(self, train_x, train_y, epochs=10, batch_size=32):

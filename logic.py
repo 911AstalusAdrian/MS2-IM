@@ -8,17 +8,21 @@ from sklearn.model_selection import KFold
 from torch.utils.data import DataLoader, TensorDataset
 from sklearn.ensemble import RandomForestClassifier
 
-
-from encoders import OneHotEncoder, KMerEncoder
-from data_processing import load_and_preprocess_data, process_sequences
+from encoders import OneHotEncoder, KMerEncoder, DNAAutoencoder
+from data_processing import load_and_preprocess_data, process_sequences, get_max_len, load_autoencoder_data
 from algorithms import CNNClassifier
 
+import os
+import pickle
 
 
 # Evaluate the models result regarding the input data
 def evaluate_algorithm(model, model_type, encoder, sequence, max_length):
     user_input_sequence = process_sequences(sequence, max_length)
-    encoded_user_input = encoder.encode(user_input_sequence, max_length, 4)
+    if isinstance(encoder, DNAAutoencoder):
+        encoded_user_input = encoder.encode_sequence(user_input_sequence)
+    else:
+        encoded_user_input = encoder.encode(user_input_sequence, max_length, 4)
     if model_type == "cnn":
         encoded_user_input = encoded_user_input.unsqueeze(0)  # Add batch dimension
         cnn_output = model(encoded_user_input.permute(0, 2, 1))
@@ -102,14 +106,13 @@ def train_cnn_k_fold(model, data_x, data_y, num_epochs=5, batch_size=32, n_split
         avg_f1 += value['F1 Score']
         avg_recall += value['Recall']
 
-
     fin_acc = avg_acc / len(results.items())
     fin_f1 = avg_f1 / len(results.items())
     fin_recall = avg_recall / len(results.items())
 
-    print(f'Average: Accuracy {avg_acc / len(results.items())}% - F1 Score {avg_f1 / len(results.items())} - Recall {avg_recall / len(results.items())}')
-    return fin_acc, fin_f1, fin_recall
-
+    print(
+        f'Average: Accuracy {avg_acc / len(results.items())}% - F1 Score {avg_f1 / len(results.items())} - Recall {avg_recall / len(results.items())}')
+    return model, fin_acc, fin_f1, fin_recall
 
 
 def train_rf_k_fold(data_x, data_y, n_estimators=100, n_splits=5):
@@ -158,24 +161,36 @@ def train_rf_k_fold(data_x, data_y, n_estimators=100, n_splits=5):
         avg_f1 += value['F1 Score']
         avg_recall += value['Recall']
 
+    fin_acc = avg_acc / len(results.items())
+    fin_f1 = avg_f1 / len(results.items())
+    fin_recall = avg_recall / len(results.items())
 
-    fin_acc = avg_acc/len(results.items())
-    fin_f1 = avg_f1/len(results.items())
-    fin_recall = avg_recall/len(results.items())
-
-    print(f'Average: Accuracy {avg_acc/len(results.items())}% - F1 Score {avg_f1/len(results.items())} - Recall {avg_recall/len(results.items())}')
+    print(
+        f'Average: Accuracy {avg_acc / len(results.items())}% - F1 Score {avg_f1 / len(results.items())} - Recall {avg_recall / len(results.items())}')
 
     return model, fin_acc, fin_f1, fin_recall
 
 
 def run_main_logic(user_input_sequence, encoder_choice, algorithm_choice):
+    onehot_cnn = 'Models/onehot_cnn.sav'
+    kmer_cnn = 'Models/kmer_cnn.sav'
+    onehot_rf = 'Models/onehot_rf.sav'
+    kmer_rf = 'Models/kmer_rf.sav'
+
     if encoder_choice == "OneHotEncoder":
         encoder = OneHotEncoder()
         input_channels = 4
     elif encoder_choice == "KMerEncoder":
         encoder = KMerEncoder()
         input_channels = len(encoder.kmer_to_idx)
-
+    elif encoder_choice == 'Autoencoder':
+        print("Autoencoder choice")
+        max_len = get_max_len()
+        input_dim = max_len * 4
+        encoding_dim = 16
+        encoder = DNAAutoencoder(input_dim, encoding_dim)
+        training_data = load_autoencoder_data()
+        encoder.train_autoencoder(training_data, num_epochs=10)
     # Load and process data
     data_x, data_y, max_length = load_and_preprocess_data(encoder)
 
@@ -183,20 +198,71 @@ def run_main_logic(user_input_sequence, encoder_choice, algorithm_choice):
     if isinstance(encoder, KMerEncoder):
         max_length = max_length - encoder.k + 1
 
-
     if algorithm_choice == "CNN Classifier":
-        # Instantiate the CNN model
-        input_channels = 4
-        num_classes = 2  # Ancient vs. Modern
-        embedding_dim = None
-        model = CNNClassifier(input_channels, num_classes, embedding_dim)
-        result = evaluate_algorithm(model, "cnn", encoder, user_input_sequence, max_length)
-
-        accuracy, f1, recall = train_cnn_k_fold(model, data_x, data_y)
+        if encoder_choice == 'OneHotEncoder':
+            if os.path.exists(onehot_cnn):
+                print('CNN + OneHot model exists')
+                model = pickle.load(open(onehot_cnn, 'rb'))
+                result = evaluate_algorithm(model, "cnn", encoder, user_input_sequence, max_length)
+                print(result)
+                accuracy = 85.63499999999999
+                f1 = 0.856286990841961
+                recall = 0.8565583424719712
+            else:
+                print('Training CNN + OneHot model')
+                input_channels = 4
+                num_classes = 2  # Ancient vs. Modern
+                embedding_dim = None
+                model = CNNClassifier(input_channels, num_classes, embedding_dim)
+                result = evaluate_algorithm(model, "cnn", encoder, user_input_sequence, max_length)
+                model, accuracy, f1, recall = train_cnn_k_fold(model, data_x, data_y)
+                print('Saving CNN + OneHot model')
+                pickle.dump(model, open(onehot_cnn, 'wb'))
+                # Save metrics too?
+        elif encoder_choice == 'KMerEncoder':
+            if os.path.exists(kmer_cnn):
+                print('CNN + KMer model exists')
+                model = pickle.load(open(kmer_cnn, 'rb'))
+                # Make prediction
+            else:
+                print('Training CNN + KMer model')
+                input_channels = 4
+                num_classes = 2  # Ancient vs. Modern
+                embedding_dim = None
+                model = CNNClassifier(input_channels, num_classes, embedding_dim)
+                result = evaluate_algorithm(model, "cnn", encoder, user_input_sequence, max_length)
+                model, accuracy, f1, recall = train_cnn_k_fold(model, data_x, data_y)
+                print('Saving CNN + KMer model')
+                pickle.dump(model, open(kmer_cnn, 'wb'))
+        elif encoder_choice == 'Autoencoder':
+            input_channels = 4
+            num_classes = 2  # Ancient vs. Modern
+            embedding_dim = None
+            model = CNNClassifier(input_channels, num_classes, embedding_dim)
+            result = evaluate_algorithm(model, 'cnn', encoder, user_input_sequence, max_length)
 
     elif algorithm_choice == "Random Forest Algorithm":
-        model, accuracy, f1, recall = train_rf_k_fold(data_x, data_y)
-        result = evaluate_algorithm(model, "rf", encoder, user_input_sequence, max_length)
+        if encoder_choice == 'OneHotEncoder':
+            if os.path.exists(onehot_rf):
+                print('RF + OneHot model exists')
+                model = pickle.load(open(onehot_rf, 'rb'))
+                result = evaluate_algorithm(model, 'rf', encoder, user_input_sequence, max_length)
+            else:
+                print('Training RF + OneHot model')
+                model, accuracy, f1, recall = train_rf_k_fold(data_x, data_y)
+                result = evaluate_algorithm(model, "rf", encoder, user_input_sequence, max_length)
+                print('Saving RF + OneHot model')
+                pickle.dump(model, open(onehot_rf, 'wb'))
+        elif encoder_choice == 'KMerEncoder':
+            if os.path.exists(kmer_rf):
+                print('RF + KMer model exists')
+                model = pickle.load(open(kmer_rf, 'rb'))
+                result = evaluate_algorithm(model, 'rf', encoder, user_input_sequence, max_length)
+            else:
+                print('Training RF + KMer model')
+                model, accuracy, f1, recall = train_rf_k_fold(data_x, data_y)
+                result = evaluate_algorithm(model, "rf", encoder, user_input_sequence, max_length)
+                print('Saving RF + KMer model')
+                pickle.dump(model, open(kmer_rf, 'wb'))
 
     return result, accuracy, f1, recall
-

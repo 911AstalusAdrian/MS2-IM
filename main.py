@@ -1,24 +1,35 @@
 from UI import App
-from data_processing import load_data, load_and_preprocess_data
-from encoders import OneHotEncoder
-from logic import run_main_logic
+from data_processing import load_data, process_sequences
+from encoders import DNAAutoencoder, OneHotEncoder, KMerEncoder
+import torch
+
+
+def autoencode():
+    sequences_ancient, sequences_modern = load_data()
+    max_len = max_length = max(max(len(seq) for seq in sequences_modern), max(len(seq) for seq in sequences_ancient))
+
+    sequences_modern = process_sequences(sequences_modern, max_length)
+    sequences_ancient = process_sequences(sequences_ancient, max_length)
+    sequences = sequences_ancient + sequences_modern
+
+    input_dim = max_len * 4
+    encoding_dim = 16
+    autoencoder = DNAAutoencoder(input_dim, encoding_dim)
+
+    autoencoder.train_autoencoder(sequences, num_epochs=10)
+    seq = 'CACTACTGGTGTATCTAATCCTGTTTGCTCCCCACGCTTTCGAGCCTCAGCGTCAGTTACAGACCATAGAGCCGCTTTCGCCACCGGTGTTCCTCCATATTTCTACGCATTTCACCGCTACACATGTACTTCCACTCTCCCCTTCTGCTCTCAAGTTAAACAGTTTCCACAGCTTACTTTGGTTTATCCCCATCCTTTTACTTCATACTTTTCTACCCCCCTGCCCTCTCTTTTCCCCCATCACTTTCCCATTCCCCTTCTCCCCTACCTTTTTCACCTGTCCTCTTCCACTTCTTCTCTC'
+    print(autoencoder.encode_sequence(seq).shape)
+
+
 # Main logic:
 if __name__ == "__main__":
-    # encoder = OneHotEncoder()
-    # print("Aju")
-    # data_x, data_y, max_length = load_and_preprocess_data(encoder)
-    #
-    # print("data_x:")
-    # print(data_x)
-    # print("data_y")
-    # print(data_y)
-    # print("max_length")
-    # print(max_length)
     app = App()
     app.mainloop()
+
+    # autoencode()
 
     # Ancient DNA:
     # 'CACTACTGGTGTATCTAATCCTGTTTGCTCCCCACGCTTTCGAGCCTCAGCGTCAGTTACAGACCATAGAGCCGCTTTCGCCACCGGTGTTCCTCCATATTTCTACGCATTTCACCGCTACACATGTACTTCCACTCTCCCCTTCTGCTCTCAAGTTAAACAGTTTCCACAGCTTACTTTGGTTTATCCCCATCCTTTTACTTCATACTTTTCTACCCCCCTGCCCTCTCTTTTCCCCCATCACTTTCCCATTCCCCTTCTCCCCTACCTTTTTCACCTGTCCTCTTCCACTTCTTCTCTC'
 
     # Modern DNA:
-    # 'CCTACGGGCGGCTGCAGTGAGGAATCTTCCACAATGGGCGAAAGCCTGATGGAGCAACGCCGCGTGCAGGATGAAGGCCTTCGGGTTGTAAACTGCTTTTATGATTGAGGAATTTGACAGTAGATCATGAATAAGGATCGGCTAACTACGTGCCAGCAGCCGCGGTCATACGTAGGATCCGAGCGTTATCCGGAGTGACTGGGCGTAAAGAGTTGCGTAGGCGGTTTGTTAAGTGAATAGTGAAATCTGGTGGCTCAACCATAACGGCTATTATTCAAACTGTACAACCCGAAACTGGTAG''
+    # 'CCTACGGGCGGCTGCAGTGAGGAATCTTCCACAATGGGCGAAAGCCTGATGGAGCAACGCCGCGTGCAGGATGAAGGCCTTCGGGTTGTAAACTGCTTTTATGATTGAGGAATTTGACAGTAGATCATGAATAAGGATCGGCTAACTACGTGCCAGCAGCCGCGGTCATACGTAGGATCCGAGCGTTATCCGGAGTGACTGGGCGTAAAGAGTTGCGTAGGCGGTTTGTTAAGTGAATAGTGAAATCTGGTGGCTCAACCATAACGGCTATTATTCAAACTGTACAACCCGAAACTGGTAG'

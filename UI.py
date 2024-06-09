@@ -30,7 +30,7 @@ class App(customtkinter.CTk):
 
         self.encoder_var = customtkinter.StringVar(value="OneHotEncoder")
         self.encoder_option = customtkinter.CTkOptionMenu(self.options_frame,
-                                                          values=["OneHotEncoder", "KMerEncoder"],
+                                                          values=["OneHotEncoder", "KMerEncoder", "Autoencoder"],
                                                           command=encoder_option_callback,
                                                           variable=self.encoder_var,
                                                           width=300)
@@ -88,7 +88,7 @@ class App(customtkinter.CTk):
         # Get metrics and prediction
         result, accuracy, f1, recall = run_main_logic(user_input_sequence, encoder_choice, algorithm_choice)
 
-        self.update_metrics(result, accuracy, f1, recall)
+        # self.update_metrics(result, accuracy, f1, recall)
 
     def update_metrics(self, result, accuracy, f1, recall):
         self.accuracy_label.configure(text=f"Accuracy: {accuracy}")
